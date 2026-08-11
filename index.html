@@ -223,6 +223,17 @@
   .checkbox-field input{ width:16px; height:16px; accent-color: var(--accent); cursor:pointer; }
   .checkbox-field span{ font-size:13px; }
 
+  /* ---------- Terminabhängige Notizen ---------- */
+  .termin-notes{ display:flex; flex-direction:column; gap:6px; margin-bottom:9px; }
+  .termin-note{ display:flex; gap:8px; align-items:flex-start; background:var(--bg); border:1px solid var(--border-soft); border-radius:8px; padding:7px 9px; }
+  .termin-note .tn-date{ font-family:var(--font-mono); font-size:11px; color:var(--accent); white-space:nowrap; padding-top:1px; }
+  .termin-note .tn-text{ flex:1; font-size:12.5px; color:var(--text); white-space:pre-wrap; word-break:break-word; }
+  .termin-note .tn-del{ cursor:pointer; color:var(--text-faint); font-size:15px; line-height:1; border:none; background:none; padding:0 2px; }
+  .termin-note .tn-del:hover{ color:var(--red); }
+  .termin-empty{ color:var(--text-faint); font-size:12px; padding:2px 0 8px; }
+  .termin-add{ display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; }
+  .termin-add input[type=date]{ width:auto; }
+
   .modal-footer{ display:flex; justify-content:space-between; align-items:center; margin-top: 18px; padding-top:16px; border-top:1px solid var(--border-soft); }
   .modal-footer .right{ display:flex; gap:8px; }
 
@@ -372,8 +383,18 @@
     </div>
 
     <div class="field">
-      <label>Kommentar</label>
+      <label>Allgemeine Notizen</label>
       <textarea id="f_kommentar" placeholder="Notizen zu diesem Projekt…"></textarea>
+    </div>
+
+    <div class="field">
+      <label>Terminabhängige Notizen <span class="auto-hint">(fortlaufender Verlauf)</span></label>
+      <div class="termin-notes" id="terminNotesList"></div>
+      <div class="termin-add">
+        <input type="date" id="f_terminDatum">
+        <input type="text" id="f_terminText" placeholder="Notiz zu diesem Termin…">
+        <button type="button" class="btn btn-ghost" id="terminAddBtn">+ Eintrag</button>
+      </div>
     </div>
 
     <div class="modal-footer">
@@ -412,6 +433,7 @@
   let projects = [];
   let editingId = null;
   let dragId = null;
+  let modalNotes = [];
   let currentUser = null;
   let currentRole = 'user';
   let realtimeChannel = null;
@@ -472,6 +494,7 @@
       rechnungssc: r.rechnungsnr_ssc || '',
       erhalten: !!r.erhalten,
       kommentar1: r.kommentar || '',
+      terminNotizen: Array.isArray(r.termin_notizen) ? r.termin_notizen : [],
       column: r.status,
     };
   }
@@ -491,6 +514,7 @@
       rechnungsnr_ssc: p.rechnungssc || null,
       erhalten: !!p.erhalten,
       kommentar: p.kommentar1 || null,
+      termin_notizen: p.terminNotizen || [],
       status: p.column,
     };
   }
@@ -641,6 +665,7 @@
   function cardHTML(p){
     const hasComment = p.kommentar1 && p.kommentar1.trim().length>0;
     const overdue = isOverdue(p);
+    const noteCount = Array.isArray(p.terminNotizen) ? p.terminNotizen.length : 0;
     return `
     <div class="card${overdue ? ' overdue' : ''}" draggable="true" data-id="${p.id}">
       <div class="card-title"><span>${escapeHTML(p.projekt) || 'Unbenanntes Projekt'}</span>${hasComment?'<span class="comment-dot" title="Kommentar vorhanden"></span>':''}</div>
@@ -656,12 +681,13 @@
         <div class="fig-cell"><span class="fig-label">PJC+SSC netto</span><span class="fig-value">${fmtEUR(p.sscpjcnetto)}</span></div>
         <div class="fig-cell"><span class="fig-label">PJC+SSC brutto</span><span class="fig-value">${fmtEUR(p.sscpjcbrutto)}</span></div>
       </div>
-      ${(p.rechnungpjc || p.rechnungssc || p.rgdatumpjc || p.zahlzielpjc) ? `
+      ${(p.rechnungpjc || p.rechnungssc || p.rgdatumpjc || p.zahlzielpjc || noteCount) ? `
       <div class="tag-row">
         ${p.rechnungpjc ? `<span class="tag tag-pjc">PJC ${escapeHTML(p.rechnungpjc)}</span>`:''}
         ${p.rechnungssc ? `<span class="tag tag-ssc">SSC ${escapeHTML(p.rechnungssc)}</span>`:''}
         ${p.rgdatumpjc ? `<span class="tag tag-date">RG ${fmtDateDE(p.rgdatumpjc)}</span>`:''}
         ${p.zahlzielpjc ? `<span class="tag ${overdue ? 'tag-overdue' : 'tag-date'}">Ziel ${fmtDateDE(p.zahlzielpjc)}</span>`:''}
+        ${noteCount ? `<span class="tag">${noteCount} Notiz${noteCount>1?'en':''}</span>`:''}
       </div>`:''}
       <div class="card-footer">
         <span class="status-pill ${p.erhalten?'on':'off'}" data-toggle="${p.id}">
@@ -754,6 +780,35 @@
     sel.innerHTML = COLUMNS.map(c=>`<option value="${c.id}" ${c.id===selected?'selected':''}>${c.name}</option>`).join('');
   }
 
+  function renderTerminNotes(){
+    const list = document.getElementById('terminNotesList');
+    if(!modalNotes.length){ list.innerHTML = '<div class="termin-empty">Noch keine Termin-Notizen.</div>'; return; }
+    // Neueste zuerst; data-idx verweist auf den Originalindex für sicheres Löschen
+    const sorted = modalNotes.map((n,i)=>({n,i})).sort((a,b)=> (b.n.datum||'').localeCompare(a.n.datum||''));
+    list.innerHTML = sorted.map(({n,i})=>`
+      <div class="termin-note">
+        <span class="tn-date">${n.datum ? fmtDateDE(n.datum) : '—'}</span>
+        <span class="tn-text">${escapeHTML(n.text||'')}</span>
+        <button type="button" class="tn-del" data-idx="${i}" title="Eintrag löschen">×</button>
+      </div>`).join('');
+    list.querySelectorAll('.tn-del').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        modalNotes.splice(Number(btn.dataset.idx), 1);
+        renderTerminNotes();
+      });
+    });
+  }
+
+  function addTerminNote(){
+    const datum = document.getElementById('f_terminDatum').value || new Date().toISOString().slice(0,10);
+    const text = document.getElementById('f_terminText').value.trim();
+    if(!text){ document.getElementById('f_terminText').focus(); return; }
+    modalNotes.push({ datum, text, created_at: new Date().toISOString() });
+    document.getElementById('f_terminText').value = '';
+    document.getElementById('f_terminText').focus();
+    renderTerminNotes();
+  }
+
   function openModal(id, defaultColumn){
     editingId = id;
     const p = id ? projects.find(x=>x.id===id) : null;
@@ -776,6 +831,11 @@
     document.getElementById('f_zahlzielpjc').value = p?.zahlzielpjc || (p?.rgdatumpjc ? addDaysISO(p.rgdatumpjc, 7) : '');
     document.getElementById('f_erhalten').checked = !!p?.erhalten;
     document.getElementById('f_kommentar').value = p?.kommentar1 || '';
+
+    modalNotes = Array.isArray(p?.terminNotizen) ? p.terminNotizen.map(x=>({...x})) : [];
+    document.getElementById('f_terminDatum').value = new Date().toISOString().slice(0,10);
+    document.getElementById('f_terminText').value = '';
+    renderTerminNotes();
 
     populateColumnSelect(p?.column || defaultColumn || COLUMNS[0].id);
 
@@ -805,6 +865,7 @@
       zahlzielpjc: addDaysISO(document.getElementById('f_rgdatumpjc').value, 7),
       erhalten: document.getElementById('f_erhalten').checked,
       kommentar1: document.getElementById('f_kommentar').value.trim(),
+      terminNotizen: modalNotes,
       column: document.getElementById('f_column').value,
     };
     if(!data.projekt){ document.getElementById('f_projekt').focus(); return; }
@@ -961,6 +1022,10 @@
   document.getElementById('f_pjcbrutto').addEventListener('input', ()=>{
     const brutto = parseFloat(document.getElementById('f_pjcbrutto').value);
     document.getElementById('f_pjcnetto').value = isNaN(brutto) ? '' : round2(brutto / 1.19);
+  });
+  document.getElementById('terminAddBtn').addEventListener('click', addTerminNote);
+  document.getElementById('f_terminText').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); addTerminNote(); }
   });
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeModal(); });
   document.getElementById('exportBtn').addEventListener('click', exportCSV);
