@@ -952,6 +952,16 @@
   document.getElementById('f_rgdatumpjc').addEventListener('change', (e)=>{
     document.getElementById('f_zahlzielpjc').value = addDaysISO(e.target.value, 7);
   });
+  // PJC netto <-> brutto automatisch umrechnen (19 % USt)
+  const round2 = n => Math.round(n * 100) / 100;
+  document.getElementById('f_pjcnetto').addEventListener('input', ()=>{
+    const netto = parseFloat(document.getElementById('f_pjcnetto').value);
+    document.getElementById('f_pjcbrutto').value = isNaN(netto) ? '' : round2(netto * 1.19);
+  });
+  document.getElementById('f_pjcbrutto').addEventListener('input', ()=>{
+    const brutto = parseFloat(document.getElementById('f_pjcbrutto').value);
+    document.getElementById('f_pjcnetto').value = isNaN(brutto) ? '' : round2(brutto / 1.19);
+  });
   document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeModal(); });
   document.getElementById('exportBtn').addEventListener('click', exportCSV);
   document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
