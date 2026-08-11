@@ -194,6 +194,25 @@
 
   .comment-dot{ width:6px; height:6px; border-radius:50%; background: var(--accent); opacity:.8; }
 
+  /* ---------- Card Tabs ---------- */
+  .card-tabs{ display:flex; gap:4px; margin:2px 0 8px; }
+  .tab-btn{ font-family:var(--font-body); font-size:11px; font-weight:600; padding:4px 9px; border-radius:6px;
+    border:1px solid var(--border-soft); background:var(--bg); color:var(--text-mute); cursor:pointer; }
+  .tab-btn:hover{ color:var(--text); }
+  .tab-btn.active{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent-line); }
+  .tab-pane .field-mini{ margin-bottom:8px; }
+  .tab-pane .field-mini label{ display:block; font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-faint); margin-bottom:4px; }
+  .card-comment{ width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
+    font-family:var(--font-body); font-size:12px; padding:7px 8px; border-radius:7px; outline:none; resize:vertical; min-height:46px; box-sizing:border-box; }
+  .card-comment:focus{ border-color:var(--accent-line); }
+  .card-termin-list{ display:flex; flex-direction:column; gap:5px; margin-bottom:7px; }
+  .card-termin-add{ display:grid; grid-template-columns:auto 1fr auto; gap:5px; align-items:center; }
+  .card-termin-add input{ background:var(--bg); border:1px solid var(--border); color:var(--text);
+    font-family:var(--font-body); font-size:11.5px; padding:5px 7px; border-radius:6px; outline:none; box-sizing:border-box; min-width:0; }
+  .card-termin-add input:focus{ border-color:var(--accent-line); }
+  .btn-mini{ background:var(--accent); color:#191305; border:none; border-radius:6px; font-weight:700; font-size:14px; padding:4px 11px; cursor:pointer; line-height:1; }
+  .btn-mini:hover{ background:#dbb433; }
+
   /* ---------- Modal ---------- */
   .overlay{
     position:fixed; inset:0; background: rgba(8,10,13,0.68); backdrop-filter: blur(2px);
@@ -434,6 +453,8 @@
   let editingId = null;
   let dragId = null;
   let modalNotes = [];
+  let cardTab = {};
+  let isEditingCard = false;
   let currentUser = null;
   let currentRole = 'user';
   let realtimeChannel = null;
@@ -582,7 +603,7 @@
   function scheduleReload(){
     clearTimeout(reloadTimer);
     reloadTimer = setTimeout(()=>{
-      if(document.getElementById('overlay').style.display === 'flex'){ pendingReload = true; return; }
+      if(document.getElementById('overlay').style.display === 'flex' || isEditingCard){ pendingReload = true; return; }
       reloadProjects();
     }, 400);
   }
@@ -685,37 +706,90 @@
     `).join('');
   }
 
+  function sortedNotes(p){
+    const arr = Array.isArray(p.terminNotizen) ? p.terminNotizen : [];
+    return arr.map((n,i)=>({n,i})).sort((a,b)=> (b.n.datum||'').localeCompare(a.n.datum||''));
+  }
+
+  async function persistProject(id){
+    const p = projects.find(x=>x.id===id);
+    if(!p) return;
+    try{ await updateRow(id, toRow(p)); }
+    catch(err){ alert('Speichern fehlgeschlagen.'); reloadProjects(); }
+  }
+
+  async function addCardNote(card){
+    const id = card.dataset.id;
+    const p = projects.find(x=>x.id===id);
+    if(!p) return;
+    const dateInp = card.querySelector('.ct-date');
+    const textInp = card.querySelector('.ct-text');
+    const datum = dateInp.value || new Date().toISOString().slice(0,10);
+    const text = (textInp.value||'').trim();
+    if(!text){ textInp.focus(); return; }
+    p.terminNotizen = [...(Array.isArray(p.terminNotizen)?p.terminNotizen:[]), { datum, text, created_at: new Date().toISOString() }];
+    cardTab[id] = 'notes';
+    await persistProject(id);
+    render();
+  }
+
   function cardHTML(p){
     const hasComment = p.kommentar1 && p.kommentar1.trim().length>0;
     const overdue = isOverdue(p);
     const noteCount = Array.isArray(p.terminNotizen) ? p.terminNotizen.length : 0;
+    const activeTab = cardTab[p.id] || 'overview';
+    const notesMarkup = noteCount
+      ? sortedNotes(p).map(({n,i})=>`
+          <div class="termin-note">
+            <span class="tn-date">${n.datum ? fmtDateDE(n.datum) : '—'}</span>
+            <span class="tn-text">${escapeHTML(n.text||'')}</span>
+            <button type="button" class="tn-del" data-id="${p.id}" data-idx="${i}" title="Eintrag löschen">×</button>
+          </div>`).join('')
+      : '<div class="termin-empty">Noch keine Termin-Notizen.</div>';
     return `
-    <div class="card${overdue ? ' overdue' : ''}" draggable="true" data-id="${p.id}">
-      <div class="card-title"><span>${escapeHTML(p.projekt) || 'Unbenanntes Projekt'}</span>${hasComment?'<span class="comment-dot" title="Kommentar vorhanden"></span>':''}</div>
+    <div class="card${overdue ? ' overdue' : ''}" draggable="${activeTab==='overview'}" data-id="${p.id}">
+      <div class="card-title"><span>${escapeHTML(p.projekt) || 'Unbenanntes Projekt'}</span>${(hasComment||noteCount)?'<span class="comment-dot" title="Notizen vorhanden"></span>':''}</div>
       ${p.lieferant ? `<div class="card-supplier">${escapeHTML(p.lieferant)}</div>` : ''}
-      <div class="figure-row">
-        <span class="fig-label">PJC brutto</span>
-        <span class="fig-value">${fmtEUR(p.pjcbrutto)}</span>
+      <div class="card-tabs">
+        <button type="button" class="tab-btn ${activeTab==='overview'?'active':''}" data-tab="overview">Übersicht</button>
+        <button type="button" class="tab-btn ${activeTab==='notes'?'active':''}" data-tab="notes">Notizen${noteCount?` · ${noteCount}`:''}</button>
       </div>
-      <div class="fig-grid">
-        <div class="fig-cell"><span class="fig-label">PJC netto</span><span class="fig-value">${fmtEUR(p.pjcnetto)}</span></div>
-        <div class="fig-cell"><span class="fig-label">SSC netto</span><span class="fig-value">${fmtEUR(p.sscnetto)}</span></div>
-        <div class="fig-cell"><span class="fig-label">SSC brutto</span><span class="fig-value">${fmtEUR(p.sscbrutto)}</span></div>
-        <div class="fig-cell"><span class="fig-label">PJC+SSC netto</span><span class="fig-value">${fmtEUR(p.sscpjcnetto)}</span></div>
-        <div class="fig-cell"><span class="fig-label">PJC+SSC brutto</span><span class="fig-value">${fmtEUR(p.sscpjcbrutto)}</span></div>
+      <div class="tab-pane" data-pane="overview" style="${activeTab==='overview'?'':'display:none;'}">
+        <div class="figure-row">
+          <span class="fig-label">PJC brutto</span>
+          <span class="fig-value">${fmtEUR(p.pjcbrutto)}</span>
+        </div>
+        <div class="fig-grid">
+          <div class="fig-cell"><span class="fig-label">PJC netto</span><span class="fig-value">${fmtEUR(p.pjcnetto)}</span></div>
+          <div class="fig-cell"><span class="fig-label">SSC netto</span><span class="fig-value">${fmtEUR(p.sscnetto)}</span></div>
+          <div class="fig-cell"><span class="fig-label">SSC brutto</span><span class="fig-value">${fmtEUR(p.sscbrutto)}</span></div>
+          <div class="fig-cell"><span class="fig-label">PJC+SSC netto</span><span class="fig-value">${fmtEUR(p.sscpjcnetto)}</span></div>
+          <div class="fig-cell"><span class="fig-label">PJC+SSC brutto</span><span class="fig-value">${fmtEUR(p.sscpjcbrutto)}</span></div>
+        </div>
+        ${(p.rechnungpjc || p.rechnungssc || p.rgdatumpjc || p.zahlzielpjc) ? `
+        <div class="tag-row">
+          ${p.rechnungpjc ? `<span class="tag tag-pjc">PJC ${escapeHTML(p.rechnungpjc)}</span>`:''}
+          ${p.rechnungssc ? `<span class="tag tag-ssc">SSC ${escapeHTML(p.rechnungssc)}</span>`:''}
+          ${p.rgdatumpjc ? `<span class="tag tag-date">RG ${fmtDateDE(p.rgdatumpjc)}</span>`:''}
+          ${p.zahlzielpjc ? `<span class="tag ${overdue ? 'tag-overdue' : 'tag-date'}">Ziel ${fmtDateDE(p.zahlzielpjc)}</span>`:''}
+        </div>`:''}
+        <div class="card-footer">
+          <span class="status-pill ${p.erhalten?'on':'off'}" data-toggle="${p.id}">
+            ${p.erhalten ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Erhalten' : 'Ausstehend'}
+          </span>
+        </div>
       </div>
-      ${(p.rechnungpjc || p.rechnungssc || p.rgdatumpjc || p.zahlzielpjc || noteCount) ? `
-      <div class="tag-row">
-        ${p.rechnungpjc ? `<span class="tag tag-pjc">PJC ${escapeHTML(p.rechnungpjc)}</span>`:''}
-        ${p.rechnungssc ? `<span class="tag tag-ssc">SSC ${escapeHTML(p.rechnungssc)}</span>`:''}
-        ${p.rgdatumpjc ? `<span class="tag tag-date">RG ${fmtDateDE(p.rgdatumpjc)}</span>`:''}
-        ${p.zahlzielpjc ? `<span class="tag ${overdue ? 'tag-overdue' : 'tag-date'}">Ziel ${fmtDateDE(p.zahlzielpjc)}</span>`:''}
-        ${noteCount ? `<span class="tag">${noteCount} Notiz${noteCount>1?'en':''}</span>`:''}
-      </div>`:''}
-      <div class="card-footer">
-        <span class="status-pill ${p.erhalten?'on':'off'}" data-toggle="${p.id}">
-          ${p.erhalten ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Erhalten' : 'Ausstehend'}
-        </span>
+      <div class="tab-pane" data-pane="notes" style="${activeTab==='notes'?'':'display:none;'}">
+        <div class="field-mini">
+          <label>Kommentar</label>
+          <textarea class="card-comment" data-id="${p.id}" placeholder="Allgemeine Notizen…">${escapeHTML(p.kommentar1||'')}</textarea>
+        </div>
+        <div class="card-termin-list">${notesMarkup}</div>
+        <div class="card-termin-add">
+          <input type="date" class="ct-date" data-id="${p.id}">
+          <input type="text" class="ct-text" data-id="${p.id}" placeholder="Notiz zu diesem Termin…">
+          <button type="button" class="btn-mini ct-add" data-id="${p.id}" title="Eintrag hinzufügen">+</button>
+        </div>
       </div>
     </div>`;
   }
@@ -748,9 +822,12 @@
   }
 
   function attachBoardEvents(){
+    const todayISO = new Date().toISOString().slice(0,10);
     document.querySelectorAll('.card').forEach(card => {
       card.addEventListener('click', (e)=>{
         if (e.target.closest('.status-pill')) return;
+        if (e.target.closest('.card-tabs')) return;
+        if (e.target.closest('[data-pane="notes"]')) return;
         openModal(card.dataset.id);
       });
       card.addEventListener('dragstart', (e)=>{
@@ -759,6 +836,55 @@
         e.dataTransfer.effectAllowed = 'move';
       });
       card.addEventListener('dragend', ()=> card.classList.remove('dragging'));
+    });
+
+    // Tab-Umschaltung je Karte (ohne Neu-Rendern, damit nichts „speckt“)
+    document.querySelectorAll('.card-tabs .tab-btn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const card = btn.closest('.card');
+        const id = card.dataset.id;
+        const tab = btn.dataset.tab;
+        cardTab[id] = tab;
+        card.querySelectorAll('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.tab===tab));
+        card.querySelectorAll('.tab-pane').forEach(pane=> pane.style.display = (pane.dataset.pane===tab) ? '' : 'none');
+        card.setAttribute('draggable', tab==='overview' ? 'true' : 'false');
+      });
+    });
+
+    // Datum in der Notiz-Eingabe mit heute vorbelegen
+    document.querySelectorAll('.card-termin-add .ct-date').forEach(inp=>{ if(!inp.value) inp.value = todayISO; });
+
+    // Kommentar speichern (beim Verlassen des Feldes)
+    document.querySelectorAll('.card-comment').forEach(t=>{
+      t.addEventListener('click', e=> e.stopPropagation());
+      t.addEventListener('change', async ()=>{
+        const p = projects.find(x=>x.id===t.dataset.id);
+        if(!p) return;
+        p.kommentar1 = t.value;
+        await persistProject(t.dataset.id);
+      });
+    });
+
+    // Termin-Notiz hinzufügen
+    document.querySelectorAll('.card-termin-add .ct-add').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{ e.stopPropagation(); await addCardNote(btn.closest('.card')); });
+    });
+    document.querySelectorAll('.card-termin-add .ct-text').forEach(inp=>{
+      inp.addEventListener('keydown', async (e)=>{ if(e.key==='Enter'){ e.preventDefault(); await addCardNote(inp.closest('.card')); } });
+    });
+
+    // Termin-Notiz löschen
+    document.querySelectorAll('.tab-pane[data-pane="notes"] .tn-del').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const p = projects.find(x=>x.id===btn.dataset.id);
+        if(!p || !Array.isArray(p.terminNotizen)) return;
+        p.terminNotizen.splice(Number(btn.dataset.idx), 1);
+        cardTab[btn.dataset.id] = 'notes';
+        await persistProject(btn.dataset.id);
+        render();
+      });
     });
 
     document.querySelectorAll('.status-pill').forEach(pill=>{
@@ -1060,6 +1186,15 @@
   });
   document.getElementById('search').addEventListener('input', render);
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
+
+  // Realtime-Reload während Inline-Bearbeitung auf Karten aufschieben
+  document.addEventListener('focusin', (e)=>{ if(e.target.closest('[data-pane="notes"]')) isEditingCard = true; });
+  document.addEventListener('focusout', (e)=>{
+    if(e.target.closest('[data-pane="notes"]')){
+      isEditingCard = false;
+      if(pendingReload){ pendingReload = false; reloadProjects(); }
+    }
+  });
 
   initAuth();
 })();
