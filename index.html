@@ -478,6 +478,22 @@
 
   // ---------- Mapping: DB-Zeile <-> internes Projekt-Objekt ----------
   function fromRow(r){
+    // kommentar ist entweder reiner Text (alt) oder JSON {allgemein, termine} (neu)
+    let allgemein = '';
+    let termine = [];
+    if(r.kommentar){
+      try{
+        const parsed = JSON.parse(r.kommentar);
+        if(parsed && typeof parsed === 'object' && !Array.isArray(parsed) && ('allgemein' in parsed || 'termine' in parsed)){
+          allgemein = parsed.allgemein || '';
+          termine = Array.isArray(parsed.termine) ? parsed.termine : [];
+        } else {
+          allgemein = r.kommentar;
+        }
+      }catch(e){
+        allgemein = r.kommentar;
+      }
+    }
     return {
       id: r.id,
       projekt: r.projekt || '',
@@ -493,13 +509,21 @@
       rechnungpjc: r.rechnungsnr_pjc || '',
       rechnungssc: r.rechnungsnr_ssc || '',
       erhalten: !!r.erhalten,
-      kommentar1: r.kommentar || '',
-      terminNotizen: Array.isArray(r.termin_notizen) ? r.termin_notizen : [],
+      kommentar1: allgemein,
+      terminNotizen: termine,
       column: r.status,
     };
   }
   // zahlungsziel_pjc wird nie gesendet – ist eine generierte Spalte in der DB
   function toRow(p){
+    // Allgemeine + terminabhängige Notizen zusammen in der kommentar-Spalte ablegen
+    const termine = Array.isArray(p.terminNotizen) ? p.terminNotizen : [];
+    let kommentarVal = null;
+    if(termine.length){
+      kommentarVal = JSON.stringify({ allgemein: p.kommentar1 || '', termine });
+    } else if(p.kommentar1){
+      kommentarVal = p.kommentar1;
+    }
     return {
       projekt: p.projekt || null,
       lieferant: p.lieferant || null,
@@ -513,8 +537,7 @@
       rechnungsnr_pjc: p.rechnungpjc || null,
       rechnungsnr_ssc: p.rechnungssc || null,
       erhalten: !!p.erhalten,
-      kommentar: p.kommentar1 || null,
-      termin_notizen: p.terminNotizen || [],
+      kommentar: kommentarVal,
       status: p.column,
     };
   }
