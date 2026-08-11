@@ -348,27 +348,27 @@
     <div class="grid-2">
       <div class="field mono">
         <label>SSC netto (€)</label>
-        <input type="number" step="0.01" id="f_sscnetto" placeholder="0,00">
+        <input type="text" inputmode="decimal" class="money" id="f_sscnetto" placeholder="0,00">
       </div>
       <div class="field mono">
         <label>SSC brutto (€)</label>
-        <input type="number" step="0.01" id="f_sscbrutto" placeholder="0,00">
+        <input type="text" inputmode="decimal" class="money" id="f_sscbrutto" placeholder="0,00">
       </div>
       <div class="field mono">
         <label>PJC netto (€)</label>
-        <input type="number" step="0.01" id="f_pjcnetto" placeholder="0,00">
+        <input type="text" inputmode="decimal" class="money" id="f_pjcnetto" placeholder="0,00">
       </div>
       <div class="field mono">
         <label>PJC brutto (€)</label>
-        <input type="number" step="0.01" id="f_pjcbrutto" placeholder="0,00">
+        <input type="text" inputmode="decimal" class="money" id="f_pjcbrutto" placeholder="0,00">
       </div>
       <div class="field mono">
         <label>PJC+SSC netto (€)</label>
-        <input type="number" step="0.01" id="f_sscpjcnetto" placeholder="0,00">
+        <input type="text" inputmode="decimal" class="money" id="f_sscpjcnetto" placeholder="0,00">
       </div>
       <div class="field mono">
         <label>PJC+SSC brutto (€)</label>
-        <input type="number" step="0.01" id="f_sscpjcbrutto" placeholder="0,00">
+        <input type="text" inputmode="decimal" class="money" id="f_sscpjcbrutto" placeholder="0,00">
       </div>
     </div>
 
@@ -481,7 +481,47 @@
     return d.toISOString().slice(0,10);
   }
 
-  const numOrNull = v => (v === '' || v === null || v === undefined || isNaN(v)) ? null : Number(v);
+  // Excel-/deutsche Geldwerte robust einlesen: "1.234,56 €", "1,234.56", "1234,5" …
+  function parseMoney(input){
+    if(input === null || input === undefined) return NaN;
+    if(typeof input === 'number') return isNaN(input) ? NaN : input;
+    let s = String(input).trim();
+    if(s === '') return NaN;
+    s = s.replace(/[^0-9.,\-]/g, ''); // €, EUR, Leerzeichen, NBSP entfernen
+    if(s === '' || s === '-') return NaN;
+    const hasComma = s.includes(',');
+    const hasDot = s.includes('.');
+    if(hasComma && hasDot){
+      // Der zuletzt stehende Trenner ist das Dezimaltrennzeichen
+      if(s.lastIndexOf(',') > s.lastIndexOf('.')){
+        s = s.replace(/\./g, '').replace(',', '.'); // deutsch: Punkt=Tausender, Komma=Dezimal
+      } else {
+        s = s.replace(/,/g, ''); // englisch: Komma=Tausender, Punkt=Dezimal
+      }
+    } else if(hasComma){
+      s = s.replace(/,/g, '.'); // nur Komma → Dezimaltrennzeichen
+    } else if(hasDot){
+      const parts = s.split('.');
+      if(parts.length > 2){
+        s = parts.join(''); // mehrere Punkte → Tausendertrenner
+      } else if(parts[1] && parts[1].length === 3 && parts[0].replace('-', '').length <= 3){
+        s = parts.join(''); // z. B. "1.234" → Tausender
+      }
+    }
+    const n = parseFloat(s);
+    return isNaN(n) ? NaN : n;
+  }
+
+  // Zahl → deutsches Eingabeformat "1.234,56"
+  const fmtInput = n => (n === null || n === undefined || n === '' || isNaN(n))
+    ? ''
+    : Number(n).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const numOrNull = v => {
+    if(typeof v === 'number') return isNaN(v) ? null : v;
+    const n = parseMoney(v);
+    return isNaN(n) ? null : n;
+  };
 
   function escapeHTML(s){
     return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -968,12 +1008,12 @@
 
     document.getElementById('f_projekt').value = p?.projekt || '';
     document.getElementById('f_lieferant').value = p?.lieferant || '';
-    document.getElementById('f_sscnetto').value = p?.sscnetto ?? '';
-    document.getElementById('f_sscbrutto').value = p?.sscbrutto ?? '';
-    document.getElementById('f_sscpjcnetto').value = p?.sscpjcnetto ?? '';
-    document.getElementById('f_sscpjcbrutto').value = p?.sscpjcbrutto ?? '';
-    document.getElementById('f_pjcnetto').value = p?.pjcnetto ?? '';
-    document.getElementById('f_pjcbrutto').value = p?.pjcbrutto ?? '';
+    document.getElementById('f_sscnetto').value = fmtInput(p?.sscnetto);
+    document.getElementById('f_sscbrutto').value = fmtInput(p?.sscbrutto);
+    document.getElementById('f_sscpjcnetto').value = fmtInput(p?.sscpjcnetto);
+    document.getElementById('f_sscpjcbrutto').value = fmtInput(p?.sscpjcbrutto);
+    document.getElementById('f_pjcnetto').value = fmtInput(p?.pjcnetto);
+    document.getElementById('f_pjcbrutto').value = fmtInput(p?.pjcbrutto);
     document.getElementById('f_rgpjc').value = p?.rechnungpjc || '';
     document.getElementById('f_rgssc').value = p?.rechnungssc || '';
     document.getElementById('f_rgdatumpjc').value = p?.rgdatumpjc || '';
@@ -1165,12 +1205,20 @@
   // PJC netto <-> brutto automatisch umrechnen (19 % USt)
   const round2 = n => Math.round(n * 100) / 100;
   document.getElementById('f_pjcnetto').addEventListener('input', ()=>{
-    const netto = parseFloat(document.getElementById('f_pjcnetto').value);
-    document.getElementById('f_pjcbrutto').value = isNaN(netto) ? '' : round2(netto * 1.19);
+    const netto = parseMoney(document.getElementById('f_pjcnetto').value);
+    document.getElementById('f_pjcbrutto').value = isNaN(netto) ? '' : fmtInput(round2(netto * 1.19));
   });
   document.getElementById('f_pjcbrutto').addEventListener('input', ()=>{
-    const brutto = parseFloat(document.getElementById('f_pjcbrutto').value);
-    document.getElementById('f_pjcnetto').value = isNaN(brutto) ? '' : round2(brutto / 1.19);
+    const brutto = parseMoney(document.getElementById('f_pjcbrutto').value);
+    document.getElementById('f_pjcnetto').value = isNaN(brutto) ? '' : fmtInput(round2(brutto / 1.19));
+  });
+
+  // Geldfelder beim Verlassen ins deutsche Format bringen (auch nach Excel-Paste)
+  document.querySelectorAll('input.money').forEach(inp=>{
+    inp.addEventListener('blur', ()=>{
+      const n = parseMoney(inp.value);
+      inp.value = isNaN(n) ? '' : fmtInput(n);
+    });
   });
   document.getElementById('terminAddBtn').addEventListener('click', addTerminNote);
   document.getElementById('f_terminText').addEventListener('keydown', (e)=>{
