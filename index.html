@@ -91,7 +91,7 @@
   }
 
   /* ---------- Stat tiles ---------- */
-  .stats{ display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 26px; }
+  .stats{ display:grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 12px; margin-bottom: 26px; }
   .stat{
     background: var(--panel); border:1px solid var(--border); border-radius: var(--radius);
     padding: 14px 16px; position:relative; overflow:hidden;
@@ -616,13 +616,16 @@
   }
 
   function renderStats(){
+    const totalNetto = projects.reduce((s,p)=> s + (Number(p.pjcnetto)||0), 0);
     const total = projects.reduce((s,p)=> s + (Number(p.pjcbrutto)||0), 0);
     const erhalten = projects.filter(p=>p.erhalten).reduce((s,p)=> s + (Number(p.pjcbrutto)||0), 0);
-    const offen = total - erhalten;
+    // Offen = PJC brutto aller Karten in der Spalte "PJC Rechnung gestellt"
+    const offen = projects.filter(p=>p.column==='pjc_gestellt').reduce((s,p)=> s + (Number(p.pjcbrutto)||0), 0);
     const active = projects.filter(p=>p.column!=='pjc_erhalten').length;
 
     const stats = [
       { label:'Aktive Projekte', value: active, color:'#c9a227' },
+      { label:'PJC netto gesamt', value: fmtEUR(totalNetto), color:'#9db4e8' },
       { label:'PJC brutto gesamt', value: fmtEUR(total), color:'#e9ecf1' },
       { label:'Davon erhalten', value: fmtEUR(erhalten), color:'#4c9a6a' },
       { label:'Davon offen', value: fmtEUR(offen), color:'#e2574c' },
