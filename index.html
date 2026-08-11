@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projekt Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #12151a;
+    --bg-grad: radial-gradient(1200px 600px at 10% -10%, #171c24 0%, #12151a 55%);
+    --panel: #1a1f27;
+    --panel-2: #1f2530;
+    --border: #262c37;
+    --border-soft: #20252e;
+    --text: #e9ecf1;
+    --text-mute: #8b93a3;
+    --text-faint: #5c6673;
+    --accent: #c9a227;
+    --accent-soft: rgba(201,162,39,0.14);
+    --accent-line: rgba(201,162,39,0.35);
+    --green: #4c9a6a;
+    --green-soft: rgba(76,154,106,0.15);
+    --grey: #6b7280;
+    --slate: #5b6b82;
+    --red: #e2574c;
+    --red-soft: rgba(226,87,76,0.13);
+    --radius: 10px;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg-grad);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection{ background: var(--accent-soft); }
+
+  /* ---------- Header ---------- */
+  .app{ max-width: 1680px; margin: 0 auto; padding: 28px 32px 60px; }
+  .topbar{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap: 24px; flex-wrap: wrap; margin-bottom: 22px;
+  }
+  .title-block h1{
+    font-family: var(--font-display); font-weight: 700; font-size: 26px;
+    margin: 0 0 4px; letter-spacing: -0.01em;
+  }
+  .title-block .sub{
+    color: var(--text-mute); font-size: 13px; margin:0;
+  }
+  .title-block .sub .accent-dot{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background: var(--accent); margin-right:6px; vertical-align:middle;
+  }
+  .title-block .sub .sync-state{ color: var(--text-faint); }
+
+  .actions{ display:flex; gap:10px; align-items:center; }
+  .search-wrap{ position:relative; }
+  .search-wrap input{
+    background: var(--panel); border:1px solid var(--border); color: var(--text);
+    font-family: var(--font-body); font-size: 13px; padding: 9px 12px 9px 32px;
+    border-radius: 8px; width: 220px; outline: none; transition: border-color .15s;
+  }
+  .search-wrap input:focus{ border-color: var(--accent-line); }
+  .search-wrap svg{ position:absolute; left:10px; top:50%; transform:translateY(-50%); color: var(--text-faint); }
+
+  .btn{
+    font-family: var(--font-body); font-weight:600; font-size: 13px;
+    border-radius: 8px; padding: 9px 16px; cursor:pointer; border:1px solid transparent;
+    display:inline-flex; align-items:center; gap:7px; transition: all .15s;
+  }
+  .btn-primary{ background: var(--accent); color:#191305; }
+  .btn-primary:hover{ background:#dbb433; }
+  .btn-ghost{ background: var(--panel); color: var(--text); border-color: var(--border); }
+  .btn-ghost:hover{ border-color: var(--accent-line); color:var(--accent); }
+  .btn-danger{ background: var(--red-soft); color: var(--red); border-color: rgba(226,87,76,0.3); }
+  .btn-danger:hover{ background: rgba(226,87,76,0.22); }
+
+  .user-chip{ display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--text-mute); margin-left:2px; }
+  .user-chip .role-badge{
+    font-family:var(--font-mono); font-size:10px; padding:1px 7px; border-radius:20px;
+    background:var(--accent-soft); color:var(--accent); border:1px solid var(--accent-line);
+    text-transform:uppercase; letter-spacing:.03em;
+  }
+
+  /* ---------- Stat tiles ---------- */
+  .stats{ display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 26px; }
+  .stat{
+    background: var(--panel); border:1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; position:relative; overflow:hidden;
+  }
+  .stat::before{
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background: var(--stat-color, var(--accent));
+  }
+  .stat .label{ font-size: 11px; color: var(--text-mute); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;}
+  .stat .value{ font-family: var(--font-mono); font-size: 21px; font-weight:600; }
+  .stat .value.small{ font-size:18px; }
+
+  /* ---------- Board ---------- */
+  .board{
+    display:flex; gap:14px; overflow-x:auto; padding-bottom: 12px;
+  }
+  .board::-webkit-scrollbar{ height:8px; }
+  .board::-webkit-scrollbar-thumb{ background: var(--border); border-radius:4px; }
+  .board::-webkit-scrollbar-track{ background: transparent; }
+
+  .column{
+    flex: 0 0 288px; width: 288px; background: var(--panel);
+    border:1px solid var(--border); border-radius: var(--radius);
+    display:flex; flex-direction:column; max-height: calc(100vh - 260px); min-height: 220px;
+  }
+  .column.drag-over{ border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line) inset; }
+
+  .column-head{
+    padding: 13px 14px 11px; border-bottom: 1px solid var(--border-soft);
+    position:relative;
+  }
+  .column-head .flow-bar{
+    position:absolute; left:0; right:0; top:0; height:3px; border-radius:10px 10px 0 0;
+    background: var(--col-color, var(--grey));
+  }
+  .column-head .head-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .column-head .name{ font-family: var(--font-display); font-weight:600; font-size: 13.5px; }
+  .column-head .count{
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-mute);
+    background: var(--bg); border:1px solid var(--border-soft); border-radius:20px; padding: 1px 8px;
+  }
+  .column-head .sum{ font-family: var(--font-mono); font-size: 12.5px; color: var(--col-color, var(--text-mute)); font-weight: 500; }
+
+  .column-body{
+    flex:1; overflow-y:auto; padding: 10px; display:flex; flex-direction:column; gap:9px;
+  }
+  .column-body::-webkit-scrollbar{ width:6px; }
+  .column-body::-webkit-scrollbar-thumb{ background: var(--border); border-radius:4px; }
+
+  .add-inline{
+    margin: 2px 10px 12px; padding: 8px; border-radius:8px; border:1px dashed var(--border);
+    color: var(--text-faint); font-size:12.5px; text-align:center; cursor:pointer; transition: all .15s;
+  }
+  .add-inline:hover{ border-color: var(--accent-line); color: var(--accent); }
+
+  .empty-hint{ color: var(--text-faint); font-size:12px; text-align:center; padding: 18px 6px; }
+
+  /* ---------- Card ---------- */
+  .card{
+    background: var(--panel-2); border:1px solid var(--border); border-radius:9px;
+    padding: 11px 12px 10px; cursor:grab; transition: border-color .15s, transform .1s;
+  }
+  .card:hover{ border-color: var(--accent-line); }
+  .card.dragging{ opacity:.35; }
+  .card-title{ font-family: var(--font-body); font-weight:600; font-size: 13.5px; margin-bottom:8px; line-height:1.3;
+    display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
+  .card-title span{ flex:1; }
+  .card-supplier{ font-size: 11px; color: var(--text-mute); margin: -5px 0 8px; }
+
+  .figure-row{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:3px; }
+  .figure-row .fig-label{ font-size:10.5px; color: var(--text-faint); text-transform:uppercase; letter-spacing:.04em; }
+  .figure-row .fig-value{ font-family: var(--font-mono); font-size: 14px; font-weight:600; color: var(--text); }
+
+  .fig-grid{
+    display:grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top:6px;
+    padding-top:7px; border-top: 1px solid var(--border-soft);
+  }
+  .fig-grid .fig-cell .fig-label{ font-size:9.5px; color: var(--text-faint); text-transform:uppercase; letter-spacing:.03em; display:block; }
+  .fig-grid .fig-cell .fig-value{ font-family: var(--font-mono); font-size: 11.5px; color: var(--text-mute); font-weight:500; }
+
+  .tag-row{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .tag{
+    font-family: var(--font-mono); font-size: 10px; padding:2px 6px; border-radius:5px;
+    background: var(--bg); border:1px solid var(--border-soft); color: var(--text-mute);
+  }
+  .tag.tag-pjc{ color:#9db4e8; }
+  .tag.tag-ssc{ color:#e8b99d; }
+  .tag.tag-date{ color: var(--accent); }
+
+  .card-footer{ display:flex; align-items:center; justify-content:space-between; margin-top:9px; }
+  .status-pill{
+    font-size: 10.5px; font-weight:600; padding: 3px 8px; border-radius: 20px; display:inline-flex; align-items:center; gap:4px;
+    cursor:pointer; user-select:none; border:1px solid transparent;
+  }
+  .status-pill.on{ background: var(--green-soft); color: var(--green); border-color: rgba(76,154,106,0.3); }
+  .status-pill.off{ background: var(--bg); color: var(--text-faint); border-color: var(--border-soft); }
+  .status-pill svg{ width:11px; height:11px; }
+
+  .comment-dot{ width:6px; height:6px; border-radius:50%; background: var(--accent); opacity:.8; }
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background: rgba(8,10,13,0.68); backdrop-filter: blur(2px);
+    display:flex; align-items:center; justify-content:center; z-index: 100; padding:20px;
+  }
+  .modal{
+    background: var(--panel); border:1px solid var(--border); border-radius: 14px;
+    width: 100%; max-width: 520px; max-height: 88vh; overflow-y:auto;
+    padding: 22px 24px 20px;
+  }
+  .modal h2{ font-family: var(--font-display); font-size:18px; margin: 0 0 3px; }
+  .modal .modal-sub{ color: var(--text-mute); font-size:12px; margin: 0 0 18px; }
+  .field{ margin-bottom: 13px; }
+  .field label{ display:block; font-size: 11.5px; color: var(--text-mute); margin-bottom:5px; text-transform:uppercase; letter-spacing:.04em; }
+  .field label .auto-hint{ text-transform:none; letter-spacing:0; color: var(--text-faint); font-weight:400; }
+  .field input[type=text], .field input[type=number], .field input[type=date], .field select, .field textarea{
+    width:100%; background: var(--bg); border:1px solid var(--border); color: var(--text);
+    font-family: var(--font-body); font-size: 13.5px; padding: 9px 11px; border-radius:8px; outline:none;
+  }
+  .field input[type=number], .field.mono input{ font-family: var(--font-mono); }
+  .field input:focus, .field select:focus, .field textarea:focus{ border-color: var(--accent-line); }
+  .field input[readonly]{ color: var(--text-mute); background: var(--panel-2); cursor:not-allowed; }
+  .field textarea{ resize: vertical; min-height:56px; font-family: var(--font-body); }
+  .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .checkbox-field{ display:flex; align-items:center; gap:9px; background: var(--bg); border:1px solid var(--border);
+    border-radius:8px; padding: 10px 12px; cursor:pointer; }
+  .checkbox-field input{ width:16px; height:16px; accent-color: var(--accent); cursor:pointer; }
+  .checkbox-field span{ font-size:13px; }
+
+  .modal-footer{ display:flex; justify-content:space-between; align-items:center; margin-top: 18px; padding-top:16px; border-top:1px solid var(--border-soft); }
+  .modal-footer .right{ display:flex; gap:8px; }
+
+  /* ---------- Auth Gate ---------- */
+  .auth-gate{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background: var(--bg-grad); z-index:200; padding:20px;
+  }
+  .auth-card{
+    background: var(--panel); border:1px solid var(--border); border-radius:14px;
+    width:100%; max-width:340px; padding:26px 26px 22px;
+  }
+  .auth-card h2{ font-family:var(--font-display); margin:0 0 4px; font-size:20px; }
+  .auth-card .auth-sub{ color:var(--text-mute); font-size:12.5px; margin:0 0 18px; }
+  .auth-card input{
+    width:100%; margin-bottom:11px; padding:10px 11px; border-radius:8px; border:1px solid var(--border);
+    background:var(--bg); color:var(--text); font-family:var(--font-body); font-size:13.5px; outline:none;
+  }
+  .auth-card input:focus{ border-color:var(--accent-line); }
+  .auth-card button{
+    width:100%; padding:11px; border:none; border-radius:8px; background:var(--accent);
+    color:#191305; font-weight:600; cursor:pointer; font-family:var(--font-body); font-size:13.5px;
+  }
+  .auth-card button:disabled{ opacity:.6; cursor:default; }
+  .auth-err{ color:var(--red); font-size:12.5px; min-height:16px; margin:10px 0 0; }
+
+  @media (max-width: 640px){
+    .app{ padding: 18px 14px 40px; }
+    .stats{ grid-template-columns: 1fr 1fr; }
+    .grid-2{ grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login-Gate: wird angezeigt, solange keine Session besteht -->
+<div class="auth-gate" id="authGate" style="display:none;">
+  <form class="auth-card" id="authForm">
+    <h2>Anmelden</h2>
+    <p class="auth-sub">Projekt Pipeline · Zugang nur für freigeschaltete Nutzer.</p>
+    <input type="email" id="authEmail" placeholder="E-Mail" required autocomplete="username">
+    <input type="password" id="authPass" placeholder="Passwort" required autocomplete="current-password">
+    <button type="submit" id="authSubmit">Einloggen</button>
+    <p class="auth-err" id="authErr"></p>
+  </form>
+</div>
+
+<div class="app" style="display:none;">
+  <div class="topbar">
+    <div class="title-block">
+      <h1>Projekt Pipeline</h1>
+      <p class="sub"><span class="accent-dot"></span>Übersicht &amp; Abrechnungsstatus je Projekt · <span class="sync-state" id="syncState">Live-Sync über Supabase</span></p>
+    </div>
+    <div class="actions">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search" type="text" placeholder="Projekt suchen…">
+      </div>
+      <input type="file" id="importFile" accept=".csv" style="display:none;">
+      <button class="btn btn-ghost" id="importBtn">Import CSV</button>
+      <button class="btn btn-ghost" id="exportBtn">Export CSV</button>
+      <button class="btn btn-primary" id="newBtn">+ Neues Projekt</button>
+      <span class="user-chip" id="userChip"></span>
+      <button class="btn btn-ghost" id="logoutBtn">Abmelden</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div class="board" id="board"></div>
+</div>
+
+<div class="overlay" id="overlay" style="display:none;">
+  <div class="modal">
+    <h2 id="modalTitle">Neues Projekt</h2>
+    <p class="modal-sub">Stammdaten erfassen und Spalte zuordnen.</p>
+
+    <div class="field">
+      <label>Projekt</label>
+      <input type="text" id="f_projekt" placeholder="z. B. Musterstraße 12">
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label>Name Lieferant</label>
+        <input type="text" id="f_lieferant" placeholder="z. B. Musterfirma GmbH">
+      </div>
+      <div class="field">
+        <label>Spalte</label>
+        <select id="f_column"></select>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="field mono">
+        <label>SSC netto (€)</label>
+        <input type="number" step="0.01" id="f_sscnetto" placeholder="0,00">
+      </div>
+      <div class="field mono">
+        <label>SSC brutto (€)</label>
+        <input type="number" step="0.01" id="f_sscbrutto" placeholder="0,00">
+      </div>
+      <div class="field mono">
+        <label>PJC netto (€)</label>
+        <input type="number" step="0.01" id="f_pjcnetto" placeholder="0,00">
+      </div>
+      <div class="field mono">
+        <label>PJC brutto (€)</label>
+        <input type="number" step="0.01" id="f_pjcbrutto" placeholder="0,00">
+      </div>
+      <div class="field mono">
+        <label>PJC+SSC netto (€)</label>
+        <input type="number" step="0.01" id="f_sscpjcnetto" placeholder="0,00">
+      </div>
+      <div class="field mono">
+        <label>PJC+SSC brutto (€)</label>
+        <input type="number" step="0.01" id="f_sscpjcbrutto" placeholder="0,00">
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label>Rechnungsdatum PJC</label>
+        <input type="date" id="f_rgdatumpjc">
+      </div>
+      <div class="field">
+        <label>Zahlungsziel PJC <span class="auto-hint">(automatisch +7 Tage)</span></label>
+        <input type="date" id="f_zahlzielpjc" readonly>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="field">
+        <label>Rechnungsnummer PJC</label>
+        <input type="text" id="f_rgpjc" placeholder="z. B. PJC-2026-014">
+      </div>
+      <div class="field">
+        <label>Rechnungsnummer SSC</label>
+        <input type="text" id="f_rgssc" placeholder="z. B. SSC-2026-014">
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="checkbox-field" for="f_erhalten" style="display:flex;">
+        <input type="checkbox" id="f_erhalten">
+        <span>Zahlung erhalten</span>
+      </label>
+    </div>
+
+    <div class="field">
+      <label>Kommentar</label>
+      <textarea id="f_kommentar" placeholder="Notizen zu diesem Projekt…"></textarea>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="deleteBtn" style="display:none;">Projekt löschen</button>
+      <div class="right">
+        <button class="btn btn-ghost" id="cancelBtn">Abbrechen</button>
+        <button class="btn btn-primary" id="saveBtn">Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+  // ======================================================================
+  // Supabase-Konfiguration – hier eintragen (Project Settings -> API).
+  // NUR den anon/public Key verwenden, niemals den service_role Key!
+  // ======================================================================
+  const SUPABASE_URL = 'https://dhqjiamjkplmhzoszlxc.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRocWppYW1qa3BsbWh6b3N6bHhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0MzcxMTIsImV4cCI6MjEwMjAxMzExMn0.mkoxfTrobmJz9EUKz2HvQFeEaqIkuEM0RPHUOWdYbZE';
+
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const COLUMNS = [
+    { id:'pipeline',     name:'Pipeline',                group:'pipeline' },
+    { id:'avisiert',     name:'Projekt avisiert',        group:'todo' },
+    { id:'angelaufen',   name:'Projekt angelaufen',      group:'progress' },
+    { id:'ssc_gestellt', name:'SSC Rechnung gestellt',   group:'progress' },
+    { id:'ssc_erhalten', name:'SSC Rechnung erhalten',   group:'progress' },
+    { id:'pjc_gestellt', name:'PJC Rechnung gestellt',   group:'progress' },
+    { id:'pjc_erhalten', name:'PJC Rechnung erhalten',   group:'done' },
+  ];
+  const GROUP_COLOR = { pipeline:'#5b6b82', todo:'#6b7280', progress:'#c9a227', done:'#4c9a6a' };
+
+  let projects = [];
+  let editingId = null;
+  let dragId = null;
+  let currentUser = null;
+  let currentRole = 'user';
+  let realtimeChannel = null;
+  let reloadTimer = null;
+  let pendingReload = false;
+
+  const fmtEUR = n => (n === null || n === undefined || n === '' || isNaN(n))
+    ? '—'
+    : Number(n).toLocaleString('de-DE', { style:'currency', currency:'EUR' });
+
+  const fmtDateDE = iso => {
+    if(!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    if(isNaN(d)) return '';
+    return d.toLocaleDateString('de-DE');
+  };
+
+  // Zahlungsziel = Rechnungsdatum + 7 Tage (nur zur Anzeige; DB berechnet es ebenfalls)
+  function addDaysISO(iso, days){
+    if(!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    if(isNaN(d)) return '';
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0,10);
+  }
+
+  const numOrNull = v => (v === '' || v === null || v === undefined || isNaN(v)) ? null : Number(v);
+
+  function escapeHTML(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  function isAdmin(){ return currentRole === 'admin'; }
+
+  // ---------- Mapping: DB-Zeile <-> internes Projekt-Objekt ----------
+  function fromRow(r){
+    return {
+      id: r.id,
+      projekt: r.projekt || '',
+      lieferant: r.lieferant || '',
+      sscnetto: r.ssc_netto ?? '',
+      sscbrutto: r.ssc_brutto ?? '',
+      sscpjcnetto: r.pjc_ssc_netto ?? '',
+      sscpjcbrutto: r.pjc_ssc_brutto ?? '',
+      pjcnetto: r.pjc_netto ?? '',
+      pjcbrutto: r.pjc_brutto ?? '',
+      rgdatumpjc: r.rechnungsdatum_pjc || '',
+      zahlzielpjc: r.zahlungsziel_pjc || '',
+      rechnungpjc: r.rechnungsnr_pjc || '',
+      rechnungssc: r.rechnungsnr_ssc || '',
+      erhalten: !!r.erhalten,
+      kommentar1: r.kommentar || '',
+      column: r.status,
+    };
+  }
+  // zahlungsziel_pjc wird nie gesendet – ist eine generierte Spalte in der DB
+  function toRow(p){
+    return {
+      projekt: p.projekt || null,
+      lieferant: p.lieferant || null,
+      ssc_netto: numOrNull(p.sscnetto),
+      ssc_brutto: numOrNull(p.sscbrutto),
+      pjc_netto: numOrNull(p.pjcnetto),
+      pjc_brutto: numOrNull(p.pjcbrutto),
+      pjc_ssc_netto: numOrNull(p.sscpjcnetto),
+      pjc_ssc_brutto: numOrNull(p.sscpjcbrutto),
+      rechnungsdatum_pjc: p.rgdatumpjc || null,
+      rechnungsnr_pjc: p.rechnungpjc || null,
+      rechnungsnr_ssc: p.rechnungssc || null,
+      erhalten: !!p.erhalten,
+      kommentar: p.kommentar1 || null,
+      status: p.column,
+    };
+  }
+
+  // ---------- Datenzugriff (Supabase) ----------
+  async function reloadProjects(){
+    const { data, error } = await sb
+      .from('projekte')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if(error){ console.error('Laden fehlgeschlagen', error); return; }
+    projects = (data || []).map(fromRow);
+    render();
+  }
+
+  async function insertRow(p){
+    const row = toRow(p);
+    row.created_by = currentUser?.id || null;
+    const { data, error } = await sb.from('projekte').insert(row).select().single();
+    if(error) throw error;
+    return fromRow(data);
+  }
+
+  async function updateRow(id, patch){
+    const { error } = await sb.from('projekte').update(patch).eq('id', id);
+    if(error) throw error;
+  }
+
+  async function deleteRow(id){
+    const { error } = await sb.from('projekte').delete().eq('id', id);
+    if(error) throw error;
+  }
+
+  // Live-Sync: bei jeder DB-Änderung (auch durch andere Nutzer) neu laden
+  function subscribeRealtime(){
+    if(realtimeChannel) return;
+    realtimeChannel = sb
+      .channel('projekte-rt')
+      .on('postgres_changes', { event:'*', schema:'public', table:'projekte' }, scheduleReload)
+      .subscribe();
+  }
+  function scheduleReload(){
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(()=>{
+      if(document.getElementById('overlay').style.display === 'flex'){ pendingReload = true; return; }
+      reloadProjects();
+    }, 400);
+  }
+
+  // ---------- Auth / Login-Gate ----------
+  async function initAuth(){
+    sb.auth.onAuthStateChange((_event, session)=>{
+      if(session?.user) onLogin(session.user);
+      else onLogout();
+    });
+    const { data } = await sb.auth.getSession();
+    if(data.session?.user) onLogin(data.session.user);
+    else showLogin();
+  }
+
+  async function onLogin(user){
+    if(currentUser && currentUser.id === user.id) return;
+    currentUser = user;
+    currentRole = await fetchRole(user.id);
+    hideLogin();
+    document.querySelector('.app').style.display = '';
+    updateUserChip();
+    await reloadProjects();
+    subscribeRealtime();
+  }
+
+  function onLogout(){
+    currentUser = null;
+    currentRole = 'user';
+    if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+    projects = [];
+    document.querySelector('.app').style.display = 'none';
+    showLogin();
+  }
+
+  async function fetchRole(userId){
+    const { data } = await sb.from('profiles').select('role').eq('id', userId).single();
+    return data?.role || 'user';
+  }
+
+  function updateUserChip(){
+    const chip = document.getElementById('userChip');
+    if(!currentUser){ chip.innerHTML = ''; return; }
+    chip.innerHTML = `${escapeHTML(currentUser.email || '')} <span class="role-badge">${escapeHTML(currentRole)}</span>`;
+  }
+
+  function showLogin(){ document.getElementById('authGate').style.display = 'flex'; }
+  function hideLogin(){
+    document.getElementById('authGate').style.display = 'none';
+    document.getElementById('authErr').textContent = '';
+    document.getElementById('authForm').reset();
+  }
+
+  document.getElementById('authForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const btn = document.getElementById('authSubmit');
+    const err = document.getElementById('authErr');
+    err.textContent = '';
+    btn.disabled = true;
+    try{
+      const { error } = await sb.auth.signInWithPassword({
+        email: document.getElementById('authEmail').value.trim(),
+        password: document.getElementById('authPass').value,
+      });
+      if(error) throw error;
+    }catch(ex){
+      err.textContent = 'Login fehlgeschlagen. E-Mail/Passwort prüfen.';
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', ()=> sb.auth.signOut());
+
+  // ---------- Rendering ----------
+  function colTotal(colId){
+    return projects.filter(p=>p.column===colId).reduce((s,p)=> s + (Number(p.pjcbrutto)||0), 0);
+  }
+
+  function renderStats(){
+    const total = projects.reduce((s,p)=> s + (Number(p.pjcbrutto)||0), 0);
+    const erhalten = projects.filter(p=>p.erhalten).reduce((s,p)=> s + (Number(p.pjcbrutto)||0), 0);
+    const offen = total - erhalten;
+    const active = projects.filter(p=>p.column!=='pjc_erhalten').length;
+
+    const stats = [
+      { label:'Aktive Projekte', value: active, color:'#c9a227' },
+      { label:'PJC brutto gesamt', value: fmtEUR(total), color:'#e9ecf1' },
+      { label:'Davon erhalten', value: fmtEUR(erhalten), color:'#4c9a6a' },
+      { label:'Davon offen', value: fmtEUR(offen), color:'#e2574c' },
+    ];
+    document.getElementById('stats').innerHTML = stats.map(s => `
+      <div class="stat" style="--stat-color:${s.color}">
+        <div class="label">${s.label}</div>
+        <div class="value ${typeof s.value==='string' && s.value.length>10 ? 'small':''}">${s.value}</div>
+      </div>
+    `).join('');
+  }
+
+  function cardHTML(p){
+    const hasComment = p.kommentar1 && p.kommentar1.trim().length>0;
+    return `
+    <div class="card" draggable="true" data-id="${p.id}">
+      <div class="card-title"><span>${escapeHTML(p.projekt) || 'Unbenanntes Projekt'}</span>${hasComment?'<span class="comment-dot" title="Kommentar vorhanden"></span>':''}</div>
+      ${p.lieferant ? `<div class="card-supplier">${escapeHTML(p.lieferant)}</div>` : ''}
+      <div class="figure-row">
+        <span class="fig-label">PJC brutto</span>
+        <span class="fig-value">${fmtEUR(p.pjcbrutto)}</span>
+      </div>
+      <div class="fig-grid">
+        <div class="fig-cell"><span class="fig-label">PJC netto</span><span class="fig-value">${fmtEUR(p.pjcnetto)}</span></div>
+        <div class="fig-cell"><span class="fig-label">SSC netto</span><span class="fig-value">${fmtEUR(p.sscnetto)}</span></div>
+        <div class="fig-cell"><span class="fig-label">SSC brutto</span><span class="fig-value">${fmtEUR(p.sscbrutto)}</span></div>
+        <div class="fig-cell"><span class="fig-label">PJC+SSC netto</span><span class="fig-value">${fmtEUR(p.sscpjcnetto)}</span></div>
+        <div class="fig-cell"><span class="fig-label">PJC+SSC brutto</span><span class="fig-value">${fmtEUR(p.sscpjcbrutto)}</span></div>
+      </div>
+      ${(p.rechnungpjc || p.rechnungssc || p.rgdatumpjc || p.zahlzielpjc) ? `
+      <div class="tag-row">
+        ${p.rechnungpjc ? `<span class="tag tag-pjc">PJC ${escapeHTML(p.rechnungpjc)}</span>`:''}
+        ${p.rechnungssc ? `<span class="tag tag-ssc">SSC ${escapeHTML(p.rechnungssc)}</span>`:''}
+        ${p.rgdatumpjc ? `<span class="tag tag-date">RG ${fmtDateDE(p.rgdatumpjc)}</span>`:''}
+        ${p.zahlzielpjc ? `<span class="tag tag-date">Ziel ${fmtDateDE(p.zahlzielpjc)}</span>`:''}
+      </div>`:''}
+      <div class="card-footer">
+        <span class="status-pill ${p.erhalten?'on':'off'}" data-toggle="${p.id}">
+          ${p.erhalten ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Erhalten' : 'Ausstehend'}
+        </span>
+      </div>
+    </div>`;
+  }
+
+  function render(){
+    const q = (document.getElementById('search').value || '').trim().toLowerCase();
+    renderStats();
+    const board = document.getElementById('board');
+    board.innerHTML = COLUMNS.map(col => {
+      const items = projects.filter(p => p.column === col.id && (!q || (p.projekt||'').toLowerCase().includes(q)));
+      const color = GROUP_COLOR[col.group];
+      return `
+      <div class="column" data-col="${col.id}" style="--col-color:${color}">
+        <div class="column-head">
+          <div class="flow-bar"></div>
+          <div class="head-row">
+            <span class="name">${col.name}</span>
+            <span class="count">${items.length}</span>
+          </div>
+          <span class="sum">${fmtEUR(colTotal(col.id))}</span>
+        </div>
+        <div class="column-body" data-col="${col.id}">
+          ${items.length ? items.map(cardHTML).join('') : '<div class="empty-hint">Keine Projekte</div>'}
+        </div>
+        <div class="add-inline" data-add="${col.id}">+ Projekt hinzufügen</div>
+      </div>`;
+    }).join('');
+
+    attachBoardEvents();
+  }
+
+  function attachBoardEvents(){
+    document.querySelectorAll('.card').forEach(card => {
+      card.addEventListener('click', (e)=>{
+        if (e.target.closest('.status-pill')) return;
+        openModal(card.dataset.id);
+      });
+      card.addEventListener('dragstart', (e)=>{
+        dragId = card.dataset.id;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', ()=> card.classList.remove('dragging'));
+    });
+
+    document.querySelectorAll('.status-pill').forEach(pill=>{
+      pill.addEventListener('click', async (e)=>{
+        e.stopPropagation();
+        const id = pill.dataset.toggle;
+        const p = projects.find(x=>x.id===id);
+        if(!p) return;
+        p.erhalten = !p.erhalten;
+        render();
+        try{ await updateRow(id, { erhalten: p.erhalten }); }
+        catch(err){ alert('Änderung fehlgeschlagen.'); reloadProjects(); }
+      });
+    });
+
+    document.querySelectorAll('.column-body').forEach(zone=>{
+      zone.addEventListener('dragover', (e)=>{
+        e.preventDefault();
+        zone.closest('.column').classList.add('drag-over');
+      });
+      zone.addEventListener('dragleave', ()=> zone.closest('.column').classList.remove('drag-over'));
+      zone.addEventListener('drop', async (e)=>{
+        e.preventDefault();
+        zone.closest('.column').classList.remove('drag-over');
+        const id = dragId;
+        const p = projects.find(x=>x.id===id);
+        if(!p) return;
+        p.column = zone.dataset.col;
+        render();
+        try{ await updateRow(id, { status: p.column }); }
+        catch(err){ alert('Verschieben fehlgeschlagen.'); reloadProjects(); }
+      });
+    });
+
+    document.querySelectorAll('[data-add]').forEach(btn=>{
+      btn.addEventListener('click', ()=> openModal(null, btn.dataset.add));
+    });
+  }
+
+  function populateColumnSelect(selected){
+    const sel = document.getElementById('f_column');
+    sel.innerHTML = COLUMNS.map(c=>`<option value="${c.id}" ${c.id===selected?'selected':''}>${c.name}</option>`).join('');
+  }
+
+  function openModal(id, defaultColumn){
+    editingId = id;
+    const p = id ? projects.find(x=>x.id===id) : null;
+
+    document.getElementById('modalTitle').textContent = p ? 'Projekt bearbeiten' : 'Neues Projekt';
+    // Löschen nur für Admins (serverseitig zusätzlich durch RLS abgesichert)
+    document.getElementById('deleteBtn').style.display = (p && isAdmin()) ? 'inline-flex' : 'none';
+
+    document.getElementById('f_projekt').value = p?.projekt || '';
+    document.getElementById('f_lieferant').value = p?.lieferant || '';
+    document.getElementById('f_sscnetto').value = p?.sscnetto ?? '';
+    document.getElementById('f_sscbrutto').value = p?.sscbrutto ?? '';
+    document.getElementById('f_sscpjcnetto').value = p?.sscpjcnetto ?? '';
+    document.getElementById('f_sscpjcbrutto').value = p?.sscpjcbrutto ?? '';
+    document.getElementById('f_pjcnetto').value = p?.pjcnetto ?? '';
+    document.getElementById('f_pjcbrutto').value = p?.pjcbrutto ?? '';
+    document.getElementById('f_rgpjc').value = p?.rechnungpjc || '';
+    document.getElementById('f_rgssc').value = p?.rechnungssc || '';
+    document.getElementById('f_rgdatumpjc').value = p?.rgdatumpjc || '';
+    document.getElementById('f_zahlzielpjc').value = p?.zahlzielpjc || (p?.rgdatumpjc ? addDaysISO(p.rgdatumpjc, 7) : '');
+    document.getElementById('f_erhalten').checked = !!p?.erhalten;
+    document.getElementById('f_kommentar').value = p?.kommentar1 || '';
+
+    populateColumnSelect(p?.column || defaultColumn || COLUMNS[0].id);
+
+    document.getElementById('overlay').style.display = 'flex';
+    document.getElementById('f_projekt').focus();
+  }
+
+  function closeModal(){
+    document.getElementById('overlay').style.display = 'none';
+    editingId = null;
+    if(pendingReload){ pendingReload = false; reloadProjects(); }
+  }
+
+  async function saveFromModal(){
+    const data = {
+      projekt: document.getElementById('f_projekt').value.trim(),
+      lieferant: document.getElementById('f_lieferant').value.trim(),
+      sscnetto: document.getElementById('f_sscnetto').value,
+      sscbrutto: document.getElementById('f_sscbrutto').value,
+      sscpjcnetto: document.getElementById('f_sscpjcnetto').value,
+      sscpjcbrutto: document.getElementById('f_sscpjcbrutto').value,
+      pjcnetto: document.getElementById('f_pjcnetto').value,
+      pjcbrutto: document.getElementById('f_pjcbrutto').value,
+      rechnungpjc: document.getElementById('f_rgpjc').value.trim(),
+      rechnungssc: document.getElementById('f_rgssc').value.trim(),
+      rgdatumpjc: document.getElementById('f_rgdatumpjc').value,
+      zahlzielpjc: addDaysISO(document.getElementById('f_rgdatumpjc').value, 7),
+      erhalten: document.getElementById('f_erhalten').checked,
+      kommentar1: document.getElementById('f_kommentar').value.trim(),
+      column: document.getElementById('f_column').value,
+    };
+    if(!data.projekt){ document.getElementById('f_projekt').focus(); return; }
+
+    try{
+      if(editingId){
+        const idx = projects.findIndex(x=>x.id===editingId);
+        projects[idx] = { ...projects[idx], ...data };
+        render();
+        await updateRow(editingId, toRow(data));
+      } else {
+        const created = await insertRow(data);
+        projects.push(created);
+        render();
+      }
+      closeModal();
+    }catch(err){
+      alert('Speichern fehlgeschlagen: ' + (err.message || err));
+      reloadProjects();
+    }
+  }
+
+  async function deleteCurrent(){
+    if(!editingId) return;
+    if(!confirm('Dieses Projekt wirklich löschen?')) return;
+    const id = editingId;
+    try{
+      await deleteRow(id);
+      projects = projects.filter(x=>x.id!==id);
+      closeModal();
+      render();
+    }catch(err){
+      alert('Löschen fehlgeschlagen – dazu sind Admin-Rechte nötig.');
+    }
+  }
+
+  // ---------- CSV Export / Import ----------
+  const CSV_HEADERS = ['Projekt','Name Lieferant','Spalte','SSC netto','SSC brutto','PJC netto','PJC brutto','PJC+SSC netto','PJC+SSC brutto','Rechnungsdatum PJC','Zahlungsziel PJC','Rechnungsnummer PJC','Rechnungsnummer SSC','Erhalten','Kommentar'];
+
+  function exportCSV(){
+    const rows = projects.map(p => [
+      p.projekt, p.lieferant, COLUMNS.find(c=>c.id===p.column)?.name || p.column,
+      p.sscnetto, p.sscbrutto, p.pjcnetto, p.pjcbrutto, p.sscpjcnetto, p.sscpjcbrutto,
+      p.rgdatumpjc, p.zahlzielpjc,
+      p.rechnungpjc, p.rechnungssc, p.erhalten ? 'Ja':'Nein', p.kommentar1
+    ]);
+    const csv = [CSV_HEADERS, ...rows].map(r => r.map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'projekt-pipeline.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function parseCSV(text){
+    const delim = text.split('\n')[0].includes(';') ? ';' : ',';
+    const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l => l.trim().length);
+    const parseLine = (line) => {
+      const out = []; let cur=''; let inQ=false;
+      for(let i=0;i<line.length;i++){
+        const ch = line[i];
+        if(inQ){
+          if(ch === '"' && line[i+1] === '"'){ cur+='"'; i++; }
+          else if(ch === '"'){ inQ=false; }
+          else cur+=ch;
+        } else {
+          if(ch === '"'){ inQ=true; }
+          else if(ch === delim){ out.push(cur); cur=''; }
+          else cur+=ch;
+        }
+      }
+      out.push(cur);
+      return out;
+    };
+    const header = parseLine(lines[0]).map(h => h.trim().toLowerCase());
+    return lines.slice(1).map(l => {
+      const vals = parseLine(l);
+      const row = {};
+      header.forEach((h,i)=> row[h] = (vals[i] ?? '').trim());
+      return row;
+    });
+  }
+
+  function columnIdByName(name){
+    const hit = COLUMNS.find(c => c.name.toLowerCase() === String(name||'').toLowerCase());
+    return hit ? hit.id : COLUMNS[0].id;
+  }
+
+  function importCSV(file){
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      let imported;
+      try{
+        const rows = parseCSV(e.target.result);
+        imported = rows.map(r => ({
+          projekt: r['projekt'] || '',
+          lieferant: r['name lieferant'] || r['lieferant'] || '',
+          column: columnIdByName(r['spalte']),
+          sscnetto: r['ssc netto'] || '',
+          sscbrutto: r['ssc brutto'] || '',
+          sscpjcnetto: r['pjc+ssc netto'] || r['ssc+pjc netto'] || '',
+          sscpjcbrutto: r['pjc+ssc brutto'] || r['ssc+pjc brutto'] || '',
+          pjcnetto: r['pjc netto'] || '',
+          pjcbrutto: r['pjc brutto'] || '',
+          rgdatumpjc: r['rechnungsdatum pjc'] || '',
+          rechnungpjc: r['rechnungsnummer pjc'] || '',
+          rechnungssc: r['rechnungsnummer ssc'] || '',
+          erhalten: /^(ja|true|1|x)$/i.test(r['erhalten']||''),
+          kommentar1: r['kommentar'] || '',
+        })).filter(p => p.projekt);
+      }catch(err){
+        alert('CSV konnte nicht gelesen werden. Bitte Format prüfen.');
+        return;
+      }
+
+      if(!imported.length){ alert('Keine gültigen Zeilen in der CSV gefunden.'); return; }
+      const replace = confirm(`${imported.length} Projekt(e) gefunden.\n\nOK = bestehendes Board ersetzen\nAbbrechen = zum bestehenden Board hinzufügen`);
+
+      try{
+        if(replace){
+          if(!isAdmin()){
+            alert('Ersetzen erfordert Admin-Rechte. Die Zeilen werden stattdessen hinzugefügt.');
+          } else {
+            const { error } = await sb.from('projekte').delete().gt('created_at', '1900-01-01');
+            if(error) throw error;
+          }
+        }
+        const payload = imported.map(p => { const row = toRow(p); row.created_by = currentUser?.id || null; return row; });
+        const { error } = await sb.from('projekte').insert(payload);
+        if(error) throw error;
+        await reloadProjects();
+      }catch(err){
+        alert('Import fehlgeschlagen: ' + (err.message || err));
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  // ---------- Event-Bindings ----------
+  document.getElementById('newBtn').addEventListener('click', ()=> openModal(null, COLUMNS[0].id));
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  document.getElementById('saveBtn').addEventListener('click', saveFromModal);
+  document.getElementById('deleteBtn').addEventListener('click', deleteCurrent);
+  document.getElementById('f_rgdatumpjc').addEventListener('change', (e)=>{
+    document.getElementById('f_zahlzielpjc').value = addDaysISO(e.target.value, 7);
+  });
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id==='overlay') closeModal(); });
+  document.getElementById('exportBtn').addEventListener('click', exportCSV);
+  document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(file) importCSV(file);
+    e.target.value = '';
+  });
+  document.getElementById('search').addEventListener('input', render);
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
+
+  initAuth();
+})();
+</script>
+</body>
+</html>
