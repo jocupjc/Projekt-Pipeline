@@ -155,6 +155,8 @@
   }
   .card:hover{ border-color: var(--accent-line); }
   .card.dragging{ opacity:.35; }
+  .card.overdue{ border-color: rgba(226,87,76,0.6); background: linear-gradient(180deg, rgba(226,87,76,0.14), var(--panel-2)); }
+  .card.overdue:hover{ border-color: var(--red); }
   .card-title{ font-family: var(--font-body); font-weight:600; font-size: 13.5px; margin-bottom:8px; line-height:1.3;
     display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
   .card-title span{ flex:1; }
@@ -179,6 +181,7 @@
   .tag.tag-pjc{ color:#9db4e8; }
   .tag.tag-ssc{ color:#e8b99d; }
   .tag.tag-date{ color: var(--accent); }
+  .tag.tag-overdue{ color: var(--red); border-color: rgba(226,87,76,0.4); background: var(--red-soft); }
 
   .card-footer{ display:flex; align-items:center; justify-content:space-between; margin-top:9px; }
   .status-pill{
@@ -442,6 +445,15 @@
   }
   function isAdmin(){ return currentRole === 'admin'; }
 
+  // Zahlungsziel überschritten und noch nicht bezahlt?
+  function isOverdue(p){
+    if(!p.zahlzielpjc || p.erhalten) return false;
+    const ziel = new Date(p.zahlzielpjc + 'T00:00:00');
+    if(isNaN(ziel)) return false;
+    const today = new Date(); today.setHours(0,0,0,0);
+    return ziel < today;
+  }
+
   // ---------- Mapping: DB-Zeile <-> internes Projekt-Objekt ----------
   function fromRow(r){
     return {
@@ -625,8 +637,9 @@
 
   function cardHTML(p){
     const hasComment = p.kommentar1 && p.kommentar1.trim().length>0;
+    const overdue = isOverdue(p);
     return `
-    <div class="card" draggable="true" data-id="${p.id}">
+    <div class="card${overdue ? ' overdue' : ''}" draggable="true" data-id="${p.id}">
       <div class="card-title"><span>${escapeHTML(p.projekt) || 'Unbenanntes Projekt'}</span>${hasComment?'<span class="comment-dot" title="Kommentar vorhanden"></span>':''}</div>
       ${p.lieferant ? `<div class="card-supplier">${escapeHTML(p.lieferant)}</div>` : ''}
       <div class="figure-row">
@@ -645,7 +658,7 @@
         ${p.rechnungpjc ? `<span class="tag tag-pjc">PJC ${escapeHTML(p.rechnungpjc)}</span>`:''}
         ${p.rechnungssc ? `<span class="tag tag-ssc">SSC ${escapeHTML(p.rechnungssc)}</span>`:''}
         ${p.rgdatumpjc ? `<span class="tag tag-date">RG ${fmtDateDE(p.rgdatumpjc)}</span>`:''}
-        ${p.zahlzielpjc ? `<span class="tag tag-date">Ziel ${fmtDateDE(p.zahlzielpjc)}</span>`:''}
+        ${p.zahlzielpjc ? `<span class="tag ${overdue ? 'tag-overdue' : 'tag-date'}">Ziel ${fmtDateDE(p.zahlzielpjc)}</span>`:''}
       </div>`:''}
       <div class="card-footer">
         <span class="status-pill ${p.erhalten?'on':'off'}" data-toggle="${p.id}">
