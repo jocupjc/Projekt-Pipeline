@@ -309,7 +309,7 @@
     <div class="actions">
       <div class="search-wrap">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="search" type="text" placeholder="Projekt suchen…">
+        <input id="search" type="text" placeholder="Alle Inhalte durchsuchen…">
       </div>
       <input type="file" id="importFile" accept=".csv" style="display:none;">
       <button class="btn btn-ghost" id="importBtn">Import CSV</button>
@@ -834,12 +834,25 @@
     </div>`;
   }
 
+  // Durchsuchbarer Text einer Kachel: alle Felder inkl. Notizen
+  function searchHaystack(p){
+    const termine = Array.isArray(p.terminNotizen)
+      ? p.terminNotizen.map(t => `${t.datum||''} ${t.text||''}`).join(' ')
+      : '';
+    const colName = (COLUMNS.find(c => c.id === p.column)||{}).name || '';
+    return [
+      p.projekt, p.lieferant, p.rechnungpjc, p.rechnungssc,
+      p.sscnetto, p.sscbrutto, p.pjcnetto, p.pjcbrutto, p.sscpjcnetto, p.sscpjcbrutto,
+      p.rgdatumpjc, p.zahlzielpjc, p.kommentar1, termine, colName
+    ].map(v => (v ?? '').toString()).join(' ').toLowerCase();
+  }
+
   function render(){
     const q = (document.getElementById('search').value || '').trim().toLowerCase();
     renderStats();
     const board = document.getElementById('board');
     board.innerHTML = COLUMNS.map(col => {
-      const items = projects.filter(p => p.column === col.id && (!q || (p.projekt||'').toLowerCase().includes(q)));
+      const items = projects.filter(p => p.column === col.id && (!q || searchHaystack(p).includes(q)));
       const color = GROUP_COLOR[col.group];
       return `
       <div class="column" data-col="${col.id}" style="--col-color:${color}">
